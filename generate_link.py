@@ -39,7 +39,7 @@ class BaseBot:
             await conn.close()
         except Exception as error:
             logging.error(f"Error inserting identifier: {error}")
-            # print(f"Error inserting identifier: {error}")
+            print(f"Error inserting identifier: {error}")
             raise
 
     async def get_identifier(self, value):
