@@ -53,40 +53,43 @@ class BaseBot:
             print(f"Error getting identifier: {error}")
             raise
 
-    async def save_to_database(self, data, identifier):
-        try:
-            connection = await asyncpg.connect(**DB_CONFIG)
-            data['unique_identifier'] = str(data['unique_identifier'])
+async def save_to_database(self, data, identifier, ip_address, user_agent):
+    try:
+        connection = await asyncpg.connect(**DB_CONFIG)
+        data['unique_identifier'] = str(data['unique_identifier'])
 
-            query = f'''
-                INSERT INTO {self.user_data_table} (
-                    pixel, campaign_id, adset_id, ad_id, campaign_name,
-                    adset_name, ad_name, placement, site_source_name,
-                    fbclid, unique_identifier, channel_join_link, source_identifier
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-                )
-            '''
+        query = f'''
+            INSERT INTO {self.user_data_table} (
+                pixel, campaign_id, adset_id, ad_id, campaign_name,
+                adset_name, ad_name, placement, site_source_name,
+                fbclid, unique_identifier, channel_join_link, source_identifier,
+                ip_address, user_agent
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+            )
+        '''
 
-            await connection.execute(query,
-                                     data['pixel'],
-                                     data['campaign_id'],
-                                     data['adset_id'],
-                                     data['ad_id'],
-                                     data['campaign_name'],
-                                     data['adset_name'],
-                                     data['ad_name'],
-                                     data['placement'],
-                                     data['site_source_name'],
-                                     data['fbclid'],
-                                     data['unique_identifier'],
-                                     data['channel_join_link'],
-                                     identifier)
-            await connection.close()
-        except Exception as error:
-            logging.error(f"Error saving to the database: {error}")
-            print(f"Error saving to the database: {error}")
-            raise
+        await connection.execute(query,
+                                 data['pixel'],
+                                 data['campaign_id'],
+                                 data['adset_id'],
+                                 data['ad_id'],
+                                 data['campaign_name'],
+                                 data['adset_name'],
+                                 data['ad_name'],
+                                 data['placement'],
+                                 data['site_source_name'],
+                                 data['fbclid'],
+                                 data['unique_identifier'],
+                                 data['channel_join_link'],
+                                 identifier,
+                                 ip_address,
+                                 user_agent)
+        await connection.close()
+    except Exception as error:
+        logging.error(f"Error saving to the database: {error}")
+        print(f"Error saving to the database: {error}")
+        raise
 
 # Ініціалізація ботів з бази даних
 async def initialize_bots():
@@ -150,7 +153,7 @@ async def create_telegram_link(bot, unique_identifier):
         print(f"Error creating Telegram link: {error}")
         raise
 
-@app.route('/<identifier>', methods=['GET'])
+@app.route('/r/<identifier>', methods=['GET'])
 async def redirect_to_telegram(identifier):
     try:
         bot_prefix = identifier[:4]
@@ -169,6 +172,9 @@ async def redirect_to_telegram(identifier):
             unique_identifier = datetime.now().timestamp()
             channel_join_link = await create_telegram_link(bot, unique_identifier)
 
+            ip_address = request.remote_addr
+            user_agent = request.user_agent.string
+
             await bot.save_to_database({
                 'pixel': pixel,
                 'campaign_id': campaign_id,
@@ -182,7 +188,7 @@ async def redirect_to_telegram(identifier):
                 'fbclid': request.args.get('fbclid'),
                 'unique_identifier': unique_identifier,
                 'channel_join_link': channel_join_link,
-            }, identifier)
+            }, identifier, ip_address, user_agent)
 
             identifier_tg = channel_join_link.split('+').pop()
             redirect_link = f'tg://join?invite={identifier_tg}'
